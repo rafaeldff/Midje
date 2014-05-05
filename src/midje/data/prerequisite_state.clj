@@ -32,6 +32,7 @@
 (defmethod call-handled-by-fake? :not-called [function-var actual-args fake]
   (= function-var (:var fake)))
 
+; RFF: checks if a fake can be applied to a function
 (defmethod call-handled-by-fake? :default [function-var actual-args fake]
   (and (= function-var (:var fake))
        ((:arglist-matcher fake) actual-args)))
@@ -77,6 +78,9 @@
                                                     fakes)]
       (default-function fake-with-usable-default))))
 
+(defn- candidate-fake? [function-var fake]
+  (= function-var (:var fake))) 
+
 (defn- ^{:testable true } handle-mocked-call [function-var actual-args fakes]
   (macro/macrolet [(counting-nested-calls [& forms]
                `(try
@@ -84,7 +88,8 @@
                   ~@forms
                   (finally (record-end-of-prerequisite-call))))]
 
-    (let [action (counting-nested-calls (best-call-action function-var actual-args fakes))]
+    (let [best-call-a (best-call-action function-var actual-args fakes)
+          action (counting-nested-calls best-call-a)]
       (pred-cond action
         extended-fn?  (apply action actual-args)
         map?          (do
@@ -93,7 +98,8 @@
         :else (emit/fail {:type :prerequisite-was-called-with-unexpected-arguments
                           :var function-var
                           :actual actual-args
-                          :position (:position (first fakes))})))))
+                          :position (:position (first fakes))
+                          :candidate-fakes (filter (partial candidate-fake? function-var) fakes)})))))
 
 
 ;; Binding map related
